@@ -1,21 +1,20 @@
 # IMPORT PACKAGES
 import os
+
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn import metrics
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier  # Import the Random Forest classifier
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
 
 import lightgbm as lgb
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 
+from model_utils import lr_train, rf_train
+
 # Import data
-data = pd.read_csv('C:/Users/82102/Desktop/2023 Papers/1. 강바다 교수님 ML Paper/EXPORT.csv')
+data = pd.read_csv('./EXPORT.csv')
 X = data[['family', 'age', 'EDUCATION', 'ASSETS', 'LTC', 'LTC_SERVICE', 'MARITAL_STATUS', 'SOCIAL_ENGAGEMENT', 'REGION',
          'adl', 'iadl', 'obesity', 'DRINKING', 'SMOKING', 'HANDGRIP_STRENGTH', 'COMORBIDITIES', 'FALL', 'pain', 'EXERCISE']]
 y = data['DEMENTIA']
@@ -29,16 +28,22 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_
 classes = ['NO DEMENTIA', 'DEMENTIA']
 
 # Define models (including Random Forest)
+
+lr_perf_df, lr = lr_train(X_train, y_train) # hyperparamter tuning result, best lr model
+rf_perf_df, rf = rf_train(X_train, y_train) # hyperparamter tuning result, best rf model
+
 models = [
-    ("Logistic Regression", LogisticRegression(max_iter=1000)),
+    ("Logistic Regression", lr),
     ("Light GBM", lgb.LGBMClassifier(learning_rate=0.1, max_depth=3)),
     ("XGBoost", XGBClassifier(n_estimators=150, max_depth=3, learning_rate=0.1, objective='binary:logistic')),
     ("CatBoost", CatBoostClassifier(iterations=500, depth=3, learning_rate=0.1, loss_function='Logloss', verbose=False)),
-    ("Random Forest", RandomForestClassifier(n_estimators=100, random_state=0)),  # Add Random Forest
+    ("Random Forest", rf),
 ]
 
 # Train and evaluate models
 for model_name, model in models:
+    # Hyperparameter Tuning
+    
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 

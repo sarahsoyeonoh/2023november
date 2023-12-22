@@ -15,9 +15,7 @@ from sklearn.inspection import permutation_importance
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
 
-from multiprocessing.sharedctypes import Value
 from pathlib import Path
-import pandas as pd
 from sklearn.metrics import mean_squared_error
 from catboost import CatBoostClassifier, Pool
 
