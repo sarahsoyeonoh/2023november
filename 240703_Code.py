@@ -123,7 +123,7 @@ for model_name, model in models:
         # Aggregate predictions and true labels for ROC curve
         all_y_true = np.concatenate([all_y_true, y_test])
         all_y_pred_prob = np.concatenate([all_y_pred_prob, y_pred_prob])
-pr
+
         # Calculate performance metrics
         accuracy = metrics.accuracy_score(y_test, y_pred)
         precision, recall, _ = precision_recall_curve(y_test, y_pred_prob)
