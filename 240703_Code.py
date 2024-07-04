@@ -1,5 +1,7 @@
 # IMPORT PACKAGES
 import os
+import pickle
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
@@ -12,7 +14,6 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
-
 import lightgbm as lgb
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
@@ -68,13 +69,6 @@ y = y[X.index]
 # Initialize Stratified K-Fold
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
 
-# Initialize lists to store performance metrics across folds
-auc_scores = []
-accuracies = []
-auprcs = []
-recalls = []
-conf_matrices = []
-
 # Aggregated predictions and true labels for ROC curve
 all_y_true = np.array([])
 all_y_pred_prob = np.array([])
@@ -98,20 +92,20 @@ fig_pr, ax_pr = plt.subplots(figsize=(10, 7))
 fig_cal, ax_cal = plt.subplots(figsize=(10, 7))
 fig_dec, ax_dec = plt.subplots(figsize=(10, 7))
 
+# Initialize dictionaries to store performance metrics across folds/models
+auc_scores = {model_name: [] for model_name, _ in models}
+accuracies = {model_name: [] for model_name, _ in models}
+auprcs = {model_name: [] for model_name, _ in models}
+recalls = {model_name: [] for model_name, _ in models}
+conf_matrices = {model_name: [] for model_name, _ in models}
+
+prob_trues = {model_name: [] for model_name, _ in models}
+prob_preds = {model_name: [] for model_name, _ in models}
+net_benefits_dict = {model_name: [] for model_name, _ in models}
+thresholds_dict = {model_name: [] for model_name, _ in models}
 
 # Perform model training and evaluation with bootstrapping
 for model_name, model in models:
-    fold_auc_scores = []
-    fold_accuracies = []
-    fold_auprcs = []
-    fold_recalls = []
-    fold_conf_matrices = []
-    
-    fold_prob_true = []
-    fold_prob_pred = []
-    fold_net_benefits = []
-    fold_thresholds = []
-
     for train_index, test_index in skf.split(X, y):
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
@@ -135,36 +129,30 @@ for model_name, model in models:
         thresholds = np.linspace(0.01, 0.99, 100)
         net_benefits = decision_curve_analysis(y_test, y_pred_prob, thresholds) # decision curve (clinical utility)
 
-        fold_accuracies.append(accuracy)
-        fold_auprcs.append(auprc)
-        fold_recalls.append(np.mean(recall))  # Average recall values
-        fold_conf_matrices.append(confusion)
-        fold_auc_scores.append(auc_score)
+        auc_scores[model_name].append(auc_score)
+        accuracies[model_name].append(accuracy)
+        auprcs[model_name].append(auprc)
+        recalls[model_name].append(np.mean(recall))  # Average recall values
+        conf_matrices[model_name].append(confusion)
 
-        fold_prob_true.extend(prob_true)
-        fold_prob_pred.extend(prob_pred)
-        fold_net_benefits.append(net_benefits)
+        prob_trues[model_name].extend(prob_true)
+        prob_preds[model_name].extend(prob_pred)
+        net_benefits_dict[model_name].append(net_benefits)
+        thresholds_dict[model_name].append(thresholds)
     
-    print(fold_prob_true)
-    print(fold_prob_pred)
-    ax_cal.plot(np.array(fold_prob_true), np.array(fold_prob_pred), marker='o', label=model_name)
+    print(prob_trues)
+    print(prob_preds)
+    ax_cal.plot(np.array(prob_trues[model_name]), np.array(prob_preds[model_name]), marker='o', label=model_name)
 
     # Calculate median AUC and IQR
-    median_auc = np.median(fold_auc_scores)
-    auc_iqr = np.percentile(fold_auc_scores, 75) - np.percentile(fold_auc_scores, 25)
-
-    # Store overall performance metrics
-    accuracies.append(np.mean(fold_accuracies))
-    auprcs.append(np.mean(fold_auprcs))
-    recalls.append(np.mean(fold_recalls))  # Average recall values
-    conf_matrices.append(np.mean(fold_conf_matrices, axis=0))
-    auc_scores.append((median_auc, auc_iqr))
+    median_auc = np.median(auc_scores[model_name])
+    auc_iqr = np.percentile(auc_scores[model_name], 75) - np.percentile(auc_scores[model_name], 25)
 
     print(f"Model: {model_name}")
-    print(f"Accuracy: {np.mean(fold_accuracies)}")
-    print(f"AUPRC: {np.mean(fold_auprcs)}")
-    print(f"Recall: {np.mean(fold_recalls)}")
-    print(f"Confusion Matrix:\n{np.mean(fold_conf_matrices, axis=0)}")
+    print(f"Accuracy: {np.mean(accuracies[model_name])}")
+    print(f"AUPRC: {np.mean(auprcs[model_name])}")
+    print(f"Recall: {np.mean(recalls[model_name])}")
+    print(f"Confusion Matrix:\n{np.mean(conf_matrices[model_name], axis=0)}")
     print(f"Median AUC: {median_auc:.4f} +/- {auc_iqr:.4f}")  # Display median AUC and IQR
 
     # Plot ROC curve using aggregated predictions
@@ -173,7 +161,7 @@ for model_name, model in models:
 
     # plot AUPRC curve using aggregated predictions
     precision_vals, recall_vals, _ = precision_recall_curve(all_y_true, all_y_pred_prob)
-    ax_pr.plot(recall_vals, precision_vals, label=f"{model_name} (Median AUPRC={np.mean(fold_auprcs):.4f})")
+    ax_pr.plot(recall_vals, precision_vals, label=f"{model_name} (Median AUPRC={np.mean(auprcs[model_name]):.4f})")
 
     # # Ensure all arrays have the same shape before averaging
     # min_len = min(len(arr) for arr in fold_prob_true)
@@ -185,4 +173,8 @@ for model_name, model in models:
     ax_cal.plot([0, 1], [0, 1], linestyle='--', label='Perfectly Calibrated')
 
     # Decision Curve Analysis
-    ax_dec.plot(thresholds, np.mean(np.array(fold_net_benefits), axis=0), label=model_name)
+    ax_dec.plot(thresholds, np.mean(np.array(net_benefits_dict[model_name]), axis=0), label=model_name)
+
+# Save dictionary (HW: If you want to save the result for evaluation later you can save dictionaries like this)
+with open('auc_scores.pkl', 'wb') as f:
+    pickle.dump(auc_scores, f)
