@@ -176,5 +176,20 @@ for model_name, model in models:
     ax_dec.plot(thresholds, np.mean(np.array(net_benefits_dict[model_name]), axis=0), label=model_name)
 
 # Save dictionary (HW: If you want to save the result for evaluation later you can save dictionaries like this)
-with open('auc_scores.pkl', 'wb') as f:
-    pickle.dump(auc_scores, f)
+
+def save_dict(dictionary, filename):
+    with open(f'{filename}.pkl', 'wb') as f:
+        pickle.dump(dictionary, f)
+
+save_dict(auc_scores, 'auc_scores')
+save_dict(accuracies, 'accuracies')
+save_dict(auprcs, 'auprcs')
+save_dict(recalls, 'recalls')
+save_dict(conf_matrices, 'conf_matrices')
+
+save_dict(prob_trues, 'prob_trues')
+save_dict(prob_preds, 'prob_preds')
+save_dict(net_benefits_dict, 'net_benefits_dict')
+save_dict(thresholds_dict, 'thresholds_dict')
+
+
